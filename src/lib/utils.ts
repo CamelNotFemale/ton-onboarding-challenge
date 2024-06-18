@@ -1,8 +1,8 @@
-import {pseudoRandomBytes} from "crypto";
-import {Address, Cell} from "ton";
+import {pseudoRandomBytes, randomBytes} from "crypto";
+import { Address, Cell, beginCell } from "@ton/core";
 
-export function randomAddress() {
-    return new Address(0, pseudoRandomBytes(256 / 8))
+export function randomAddress(): Address {
+    return new Address(0, randomBytes(256 / 8));
 }
 
 const OFF_CHAIN_CONTENT_PREFIX = 0x01
@@ -13,10 +13,10 @@ export function flattenSnakeCell(cell: Cell) {
     let res = Buffer.alloc(0)
 
     while (c) {
-        let cs = c.beginParse()
-        let data = cs.readRemainingBytes()
-        res = Buffer.concat([res, data])
-        c = c.refs[0]
+        let cs = c.beginParse();
+        let data = cs.loadBuffer(cs.remainingBits / 8);
+        res = Buffer.concat([res, data]);
+        c = c.refs[0] || null;
     }
 
     return res
@@ -31,24 +31,24 @@ function bufferToChunks(buff: Buffer, chunkSize: number) {
     return chunks
 }
 
-export function makeSnakeCell(data: Buffer) {
-    let chunks = bufferToChunks(data, 127)
-    let rootCell = new Cell()
-    let curCell = rootCell
+export function makeSnakeCell(data: Buffer): Cell {
+    let chunks = bufferToChunks(data, 127);
+    let rootCell = beginCell();
+    let curCell = rootCell;
 
     for (let i = 0; i < chunks.length; i++) {
-        let chunk = chunks[i]
+        let chunk = chunks[i];
 
-        curCell.bits.writeBuffer(chunk)
+        curCell.storeBuffer(chunk);
 
-        if (chunks[i+1]) {
-            let nextCell = new Cell()
-            curCell.refs.push(nextCell)
-            curCell = nextCell
+        if (chunks[i + 1]) {
+            let nextCell = beginCell();
+            curCell.storeRef(nextCell.endCell());
+            curCell = nextCell;
         }
     }
 
-    return rootCell
+    return rootCell.endCell();
 }
 
 export function encodeOffChainContent(content: string) {

@@ -1,6 +1,6 @@
 import { compileFunc, CompileResult } from "@ton-community/func-js";
 import { readFileSync } from "fs";
-import { Cell } from "ton";
+import { Cell } from "@ton/ton";
 
 const files = ['stdlib.fc', 'storage.fc', 'op-codes.fc', 'collection.fc'];
 
