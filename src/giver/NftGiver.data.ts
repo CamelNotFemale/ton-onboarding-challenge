@@ -1,4 +1,4 @@
-import {Address, beginCell, Cell, contractAddress, StateInit} from "ton";
+import {Address, beginCell, Cell, contractAddress, StateInit} from "@ton/core";
 import BN from "bn.js";
 import { getNftGiverCodeCell } from "./NftGiver.code";
 import { encodeOffChainContent } from "../lib/utils";
@@ -37,58 +37,60 @@ export type NftGiverData = {
 //  = Storage;
 
 export function buildNftGiverDataCell(data: NftGiverData) {
-    let dataCell = new Cell()
+    let builder = beginCell();
 
-    dataCell.bits.writeAddress(data.ownerAddress)
-    dataCell.bits.writeUint(data.nextItemIndex, 64)
+    builder.storeAddress(data.ownerAddress);
+    builder.storeUint(BigInt(data.nextItemIndex.toString()), 64);
 
-    let contentCell = new Cell()
+    let contentCell = beginCell();
 
-    let collectionContent = encodeOffChainContent(data.collectionContent)
+    let collectionContent = encodeOffChainContent(data.collectionContent);
 
-    let commonContent = new Cell()
-    commonContent.bits.writeBuffer(Buffer.from(data.commonContent))
+    let commonContent = beginCell();
+    commonContent.storeBuffer(Buffer.from(data.commonContent));
 
-    contentCell.refs.push(collectionContent)
-    contentCell.refs.push(commonContent)
-    dataCell.refs.push(contentCell)
+    contentCell.storeRef(collectionContent);
+    contentCell.storeRef(commonContent.endCell());
+    builder.storeRef(contentCell.endCell());
 
-    dataCell.refs.push(data.nftItemCode)
+    builder.storeRef(data.nftItemCode);
 
-    let royaltyCell = new Cell()
-    royaltyCell.bits.writeUint(data.royaltyParams.royaltyFactor, 16)
-    royaltyCell.bits.writeUint(data.royaltyParams.royaltyBase, 16)
-    royaltyCell.bits.writeAddress(data.royaltyParams.royaltyAddress)
-    dataCell.refs.push(royaltyCell)
+    let royaltyCell = beginCell();
+    royaltyCell.storeUint(data.royaltyParams.royaltyFactor, 16);
+    royaltyCell.storeUint(data.royaltyParams.royaltyBase, 16);
+    royaltyCell.storeAddress(data.royaltyParams.royaltyAddress);
+    builder.storeRef(royaltyCell.endCell());
 
-    dataCell.bits.writeUint(data.powComplexity, 256)
-    dataCell.bits.writeUint(data.lastSuccess, 32)
-    dataCell.bits.writeUint(data.seed, 128)
-    dataCell.bits.writeUint(data.targetDelta, 32)
-    dataCell.bits.writeUint(data.minComplexity, 8)
-    dataCell.bits.writeUint(data.maxComplexity, 8)
+    builder.storeUint(BigInt(data.powComplexity.toString()), 256);
+    builder.storeUint(data.lastSuccess, 32);
+    builder.storeUint(BigInt(data.seed.toString()), 128);
+    builder.storeUint(data.targetDelta, 32);
+    builder.storeUint(data.minComplexity, 8);
+    builder.storeUint(data.maxComplexity, 8);
 
-    return dataCell
+    return builder.endCell();
 }
 
 export async function buildNftGiverStateInit(conf: NftGiverData) {
-    const dataCell = buildNftGiverDataCell(conf)
-    const codeCell = await getNftGiverCodeCell()
-    let stateInit = new StateInit({
+    const dataCell = buildNftGiverDataCell(conf);
+    const codeCell = await getNftGiverCodeCell();
+
+    const stateInit = {
         code: codeCell,
         data: dataCell
-    })
+    };
 
-    let stateInitCell = new Cell()
-    stateInit.writeTo(stateInitCell)
+    let stateInitCell = beginCell();
+    stateInitCell.storeRef(codeCell);
+    stateInitCell.storeRef(dataCell);
 
-    let address = contractAddress({workchain: 0, initialCode: codeCell, initialData: dataCell})
+    let address = contractAddress(0, stateInit); // workchain is 0
 
     return {
-        stateInit: stateInitCell,
+        stateInit: stateInitCell.endCell(),
         stateInitMessage: stateInit,
         address
-    }
+    };
 }
 
 export const OperationCodes = {
@@ -109,53 +111,53 @@ export type MineMessageParams = {
 }
 
 export const Queries = {
-    changeOwner: (params: { queryId?: number, newOwner: Address }) => {
-        let msgBody = new Cell()
-        msgBody.bits.writeUint(OperationCodes.ChangeOwner, 32)
-        msgBody.bits.writeUint(params.queryId || 0, 64)
-        msgBody.bits.writeAddress(params.newOwner)
-        return msgBody
+    changeOwner: (params: { queryId?: number; newOwner: Address }) => {
+        let msgBody = beginCell();
+        msgBody.storeUint(OperationCodes.ChangeOwner, 32);
+        msgBody.storeUint(params.queryId || 0, 64);
+        msgBody.storeAddress(params.newOwner);
+        return msgBody.endCell();
     },
     getRoyaltyParams: (params: { queryId?: number }) => {
-        let msgBody = new Cell()
-        msgBody.bits.writeUint(OperationCodes.GetRoyaltyParams, 32)
-        msgBody.bits.writeUint(params.queryId || 0, 64)
-        return msgBody
+        let msgBody = beginCell();
+        msgBody.storeUint(OperationCodes.GetRoyaltyParams, 32);
+        msgBody.storeUint(params.queryId || 0, 64);
+        return msgBody.endCell();
     },
-    editContent: (params: { queryId?: number, collectionContent: string, commonContent: string,  royaltyParams: RoyaltyParams }) => {
-        let msgBody = new Cell()
-        msgBody.bits.writeUint(OperationCodes.EditContent, 32)
-        msgBody.bits.writeUint(params.queryId || 0, 64)
+    editContent: (params: { queryId?: number; collectionContent: string; commonContent: string; royaltyParams: RoyaltyParams }) => {
+        let msgBody = beginCell();
+        msgBody.storeUint(OperationCodes.EditContent, 32);
+        msgBody.storeUint(params.queryId || 0, 64);
 
-        let royaltyCell = new Cell()
-        royaltyCell.bits.writeUint(params.royaltyParams.royaltyFactor, 16)
-        royaltyCell.bits.writeUint(params.royaltyParams.royaltyBase, 16)
-        royaltyCell.bits.writeAddress(params.royaltyParams.royaltyAddress)
+        let royaltyCell = beginCell();
+        royaltyCell.storeUint(params.royaltyParams.royaltyFactor, 16);
+        royaltyCell.storeUint(params.royaltyParams.royaltyBase, 16);
+        royaltyCell.storeAddress(params.royaltyParams.royaltyAddress);
 
-        let contentCell = new Cell()
+        let contentCell = beginCell();
 
-        let collectionContent = encodeOffChainContent(params.collectionContent)
+        let collectionContent = encodeOffChainContent(params.collectionContent);
 
-        let commonContent = new Cell()
-        commonContent.bits.writeBuffer(Buffer.from(params.commonContent))
+        let commonContent = beginCell();
+        commonContent.storeBuffer(Buffer.from(params.commonContent));
 
-        contentCell.refs.push(collectionContent)
-        contentCell.refs.push(commonContent)
+        contentCell.storeRef(collectionContent);
+        contentCell.storeRef(commonContent.endCell());
 
-        msgBody.refs.push(contentCell)
-        msgBody.refs.push(royaltyCell)
+        msgBody.storeRef(contentCell.endCell());
+        msgBody.storeRef(royaltyCell.endCell());
 
-        return msgBody
+        return msgBody.endCell();
     },
     mine: (params: MineMessageParams) => beginCell()
         .storeUint(OperationCodes.Mine, 32)
         .storeUint(params.expire, 32)
         .storeAddress(params.mintTo)
-        .storeUint(params.data1, 256)
-        .storeUint(params.seed, 128)
-        .storeUint(params.data2 || params.data1, 256)
+        .storeUint(BigInt(params.data1.toString()), 256)
+        .storeUint(BigInt(params.seed.toString()), 128)
+        .storeUint(params.data2 ? BigInt(params.data2.toString()) : BigInt(params.data1.toString()), 256)
         .endCell(),
-    rescaleComplexity: (params: { queryId?: number, expire: number }) => beginCell()
+    rescaleComplexity: (params: { queryId?: number; expire: number }) => beginCell()
         .storeUint(OperationCodes.RescaleComplexity, 32)
         .storeUint(params.queryId || 0, 64)
         .storeUint(params.expire, 32)
